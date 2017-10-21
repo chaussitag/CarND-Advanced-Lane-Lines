@@ -11,10 +11,10 @@ import cPickle
 # import matplotlib.image as mpimg
 
 thresh_config = {
-    "abs_sobel_x_thresh": (25, 200),
+    "abs_sobel_x_thresh": (30, 200),
     "abs_sobel_y_thresh": (25, 180),
-    "gradient_magnitude_thresh": (15, 200),
-    "gradient_direction_thresh": (0.5, 1.3),
+    "gradient_magnitude_thresh": (20, 200),
+    "gradient_direction_thresh": (0.6, 1.3),
     "s_channel_tresh": (135, 250),
 }
 
@@ -23,16 +23,18 @@ warp_config = {
     "dst_rect": np.float32([[320, 0], [950, 0], [950, 720], [320, 720]])
 }
 
-conv_det_config= {
-    "width": 50,
-    "height": 80,
-    "margin": 100
+# confiure for the 1-D convolutional based sliding widow search
+conv_det_config = {
+    "width": 50,  # width of 1-D convolutional kernel
+    "margin": 80,  # left and right distance from some center to search the maximum response of 1-D convolution
+    "height": 80,  # divide the image into sub-image of this height
 }
 
+# configure for the simple sliding window search
 window_det_config = {
-    "height": 80,
-    "margin": 80,
-    "min_num_pixels": 50
+    "height": 80, # height of the search window
+    "margin": 80, # half the width of the search window
+    "min_num_pixels": 50 # minimum number of pixels inside the search window to recalculate the search center
 }
 
 
@@ -183,26 +185,29 @@ def rgb_to_warped_binary(rgb_image, cam_intrinsic, cam_distortion):
     return warped_binary
 
 
-def sliding_window_conv_detect(warped_image, window_width, window_height, margin):
-    nonzero = np.nonzero(warped_image)
+def sliding_window_conv_detect(warped_binary, window_width, window_height, margin, return_debug_img=False):
+    if return_debug_img:
+        debug_image = np.dstack((warped_binary, warped_binary, warped_binary)) * 255
+
+    nonzero = np.nonzero(warped_binary)
     nonzero_x = nonzero[1]
     nonzero_y = nonzero[0]
 
-    img_h, img_w = warped_image.shape[0:2]
+    img_h, img_w = warped_binary.shape[0:2]
 
     # Create empty lists to receive left and right lane pixel indices
     left_lane_inds = []
     right_lane_inds = []
 
-    # Create our window template that we will use for convolutions
+    # the 1-D convolutional weights, [1, 1, ..., 1]
     conv_weight = np.ones(window_width)
 
     # First find the two starting positions for the left and right lane by using np.sum to get the vertical image slice
     # and then np.convolve the vertical image slice with the window template
 
     # Sum quarter bottom of image to get slice, could use a different ratio
-    l_sum = np.sum(warped_image[int(3 * img_h / 4):, :int(img_w / 2)], axis=0)
-    l_center = np.argmax(np.convolve(conv_weight, l_sum)) - window_width / 2
+    l_histogram = np.sum(warped_binary[int(3 * img_h / 4):, :int(img_w / 2)], axis=0)
+    l_center = np.argmax(np.convolve(conv_weight, l_histogram)) - window_width / 2
     win_top = img_h - window_height
     win_bottom = img_h
     left_win_left = max(0, int(l_center - window_width / 2))
@@ -211,42 +216,82 @@ def sliding_window_conv_detect(warped_image, window_width, window_height, margin
                       (nonzero_x >= left_win_left) & (nonzero_x < left_win_right)).nonzero()[0]
     left_lane_inds.append(good_left_inds)
 
-    r_sum = np.sum(warped_image[int(3 * img_h / 4):, int(img_w / 2):], axis=0)
-    r_center = np.argmax(np.convolve(conv_weight, r_sum)) - window_width / 2 + int(img_w / 2)
+    r_histogram = np.sum(warped_binary[int(3 * img_h / 4):, int(img_w / 2):], axis=0)
+    r_center = np.argmax(np.convolve(conv_weight, r_histogram)) - window_width / 2 + int(img_w / 2)
     right_win_left = max(0, int(r_center - window_width / 2))
     right_win_right = min(int(r_center + window_width / 2), img_w)
     good_right_inds = ((nonzero_y >= win_top) & (nonzero_y < win_bottom) &
                        (nonzero_x >= right_win_left) & (nonzero_x < right_win_right)).nonzero()[0]
     right_lane_inds.append(good_right_inds)
 
+    if return_debug_img:
+        cv2.rectangle(debug_image, (left_win_left, win_top), (left_win_right, win_bottom), (0, 255, 0), 2)
+        cv2.rectangle(debug_image, (right_win_left, win_top), (right_win_right, win_bottom), (0, 255, 0), 2)
+
+    win_area = window_width * window_height
+    # the max distance between current and previous center
+    max_dist = 0.8 * window_width
     # Go through each layer looking for max pixel locations
     for level in range(1, int(img_h / window_height)):
         # convolve the window into the vertical slice of the image
         win_top = int(img_h - (level + 1) * window_height)
         win_bottom = int(img_h - level * window_height)
-        image_layer = np.sum(warped_image[win_top:win_bottom, :], axis=0)
-        conv_signal = np.convolve(conv_weight, image_layer)
+        layer_histogram = np.sum(warped_binary[win_top:win_bottom, :], axis=0)
+        layer_conv_signal = np.convolve(conv_weight, layer_histogram)
         # Find the best left centroid by using past left center as a reference
         # Use window_width/2 as offset because convolution signal reference is at right side of window, not center of window
         offset = window_width / 2
         l_min_index = int(max(l_center + offset - margin, 0))
-        l_max_index = int(min(l_center + offset + margin, warped_image.shape[1]))
-        l_center = np.argmax(conv_signal[l_min_index:l_max_index]) + l_min_index - offset
-        left_win_left = max(0, int(l_center - window_width / 2))
-        left_win_right = min(int(l_center + window_width / 2), img_w)
+        l_max_index = int(min(l_center + offset + margin, warped_binary.shape[1]))
+        l_argmax = np.argmax(layer_conv_signal[l_min_index:l_max_index])
+        if layer_conv_signal[l_min_index + l_argmax] > (win_area / 50):
+            l_center_candidate = l_min_index + l_argmax - offset
+            # if the candidata center is far away from previous, adjust it to get close to previous one
+            diff_with_prev = l_center_candidate - l_center
+            if diff_with_prev > 0:
+                if diff_with_prev < max_dist:
+                    l_center = l_center_candidate
+                else:
+                    l_center = (l_center + min(l_center_candidate, l_center + max_dist * 2)) / 2
+            elif diff_with_prev < 0:
+                if diff_with_prev > -max_dist:
+                    l_center = l_center_candidate
+                else:
+                    l_center = (l_center + max(l_center_candidate, l_center - max_dist * 2)) / 2
+
+        left_win_left = max(0, int(l_center - offset))
+        left_win_right = min(int(l_center + offset), img_w)
         good_left_inds = ((nonzero_y >= win_top) & (nonzero_y < win_bottom) &
                           (nonzero_x >= left_win_left) & (nonzero_x < left_win_right)).nonzero()[0]
         left_lane_inds.append(good_left_inds)
 
         # Find the best right centroid by using past right center as a reference
         r_min_index = int(max(r_center + offset - margin, 0))
-        r_max_index = int(min(r_center + offset + margin, warped_image.shape[1]))
-        r_center = np.argmax(conv_signal[r_min_index:r_max_index]) + r_min_index - offset
-        right_win_left = max(0, int(r_center - window_width / 2))
-        right_win_right = min(int(r_center + window_width / 2), img_w)
+        r_max_index = int(min(r_center + offset + margin, warped_binary.shape[1]))
+        r_argmax = np.argmax(layer_conv_signal[r_min_index:r_max_index])
+        if layer_conv_signal[r_min_index + r_argmax] > (win_area / 50):
+            r_center_candidate = r_min_index + r_argmax - offset
+            # if the candidata center is far away from previous, adjust it to get close to previous one
+            diff_with_prev = r_center_candidate - r_center
+            if diff_with_prev > 0:
+                if diff_with_prev < max_dist:
+                    r_center = r_center_candidate
+                else:
+                    r_center = (r_center + min(r_center_candidate, r_center + max_dist * 2)) / 2
+            elif diff_with_prev < 0:
+                if diff_with_prev > -max_dist:
+                    r_center = r_center_candidate
+                else:
+                    r_center = (r_center + max(r_center_candidate, r_center - max_dist * 2)) / 2
+        right_win_left = max(0, int(r_center - offset))
+        right_win_right = min(int(r_center + offset), img_w)
         good_right_inds = ((nonzero_y >= win_top) & (nonzero_y < win_bottom) &
                            (nonzero_x >= right_win_left) & (nonzero_x < right_win_right)).nonzero()[0]
         right_lane_inds.append(good_right_inds)
+
+        if return_debug_img:
+            cv2.rectangle(debug_image, (left_win_left, win_top), (left_win_right, win_bottom), (0, 255, 0), 2)
+            cv2.rectangle(debug_image, (right_win_left, win_top), (right_win_right, win_bottom), (0, 255, 0), 2)
 
     # Concatenate the arrays of indices
     left_lane_inds = np.concatenate(left_lane_inds)
@@ -261,13 +306,21 @@ def sliding_window_conv_detect(warped_image, window_width, window_height, margin
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
 
-    return left_fit, right_fit
+    if return_debug_img:
+        debug_image[nonzero_y[left_lane_inds], nonzero_x[left_lane_inds]] = [255, 0, 0]
+        debug_image[nonzero_y[right_lane_inds], nonzero_x[right_lane_inds]] = [0, 0, 255]
+        return left_fit, right_fit, debug_image
+    else:
+        return left_fit, right_fit
 
-def sliding_window_detect(warped_image, window_height, margin, min_num_pixels):
-    img_h, img_w = warped_image.shape[0:2]
+
+def sliding_window_detect(warped_binary, window_height, margin, min_num_pixels, return_debug_img=False):
+    if return_debug_img:
+        debug_image = np.dstack((warped_binary, warped_binary, warped_binary)) * 255
+    img_h, img_w = warped_binary.shape[0:2]
     # Assuming you have created a warped binary image called "binary_warped"
     # Take a histogram of the bottom half of the image
-    histogram = np.sum(warped_image[img_h * 2 / 3:, :], axis=0)
+    histogram = np.sum(warped_binary[img_h * 2 / 3:, :], axis=0)
     # Find the peak of the left and right halves of the histogram
     # These will be the starting point for the left and right lines
     mid_point = np.int(histogram.shape[0] / 2)
@@ -275,9 +328,9 @@ def sliding_window_detect(warped_image, window_height, margin, min_num_pixels):
     rightx_base = np.argmax(histogram[mid_point:]) + mid_point
 
     # Identify the x and y positions of all nonzero pixels in the image
-    nonzero = warped_image.nonzero()
-    nonzeroy = np.array(nonzero[0])
-    nonzerox = np.array(nonzero[1])
+    nonzero = warped_binary.nonzero()
+    nonzero_y = np.array(nonzero[0])
+    nonzero_x = np.array(nonzero[1])
     # Current positions to be updated for each window
     leftx_current = leftx_base
     rightx_current = rightx_base
@@ -289,41 +342,54 @@ def sliding_window_detect(warped_image, window_height, margin, min_num_pixels):
     # Step through the windows one by one
     for window in range(n_windows):
         # Identify window boundaries in x and y (and right and left)
-        win_y_low = warped_image.shape[0] - (window + 1) * window_height
-        win_y_high = warped_image.shape[0] - window * window_height
+        win_y_low = warped_binary.shape[0] - (window + 1) * window_height
+        win_y_high = warped_binary.shape[0] - window * window_height
         win_xleft_low = leftx_current - margin
         win_xleft_high = leftx_current + margin
         win_xright_low = rightx_current - margin
         win_xright_high = rightx_current + margin
 
+        if return_debug_img:
+            cv2.rectangle(debug_image, (win_xleft_low, win_y_low), (win_xleft_high, win_y_high), (0, 255, 0), 2)
+            cv2.rectangle(debug_image, (win_xright_low, win_y_low), (win_xright_high, win_y_high), (0, 255, 0), 2)
+
         # Identify the nonzero pixels in x and y within the window
-        good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
-                          (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
-        good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) &
-                           (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+        good_left_inds = ((nonzero_y >= win_y_low) & (nonzero_y < win_y_high) &
+                          (nonzero_x >= win_xleft_low) & (nonzero_x < win_xleft_high)).nonzero()[0]
+        good_right_inds = ((nonzero_y >= win_y_low) & (nonzero_y < win_y_high) &
+                           (nonzero_x >= win_xright_low) & (nonzero_x < win_xright_high)).nonzero()[0]
         # Append these indices to the lists
         left_lane_inds.append(good_left_inds)
         right_lane_inds.append(good_right_inds)
+
         # If you found > minpix pixels, recenter next window on their mean position
         if len(good_left_inds) > min_num_pixels:
-            leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+            leftx_current = np.int(np.mean(nonzero_x[good_left_inds]))
         if len(good_right_inds) > min_num_pixels:
-            rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+            rightx_current = np.int(np.mean(nonzero_x[good_right_inds]))
 
     # Concatenate the arrays of indices
     left_lane_inds = np.concatenate(left_lane_inds)
     right_lane_inds = np.concatenate(right_lane_inds)
 
     # Extract left and right line pixel positions
-    leftx = nonzerox[left_lane_inds]
-    lefty = nonzeroy[left_lane_inds]
-    rightx = nonzerox[right_lane_inds]
-    righty = nonzeroy[right_lane_inds]
-
-    # Fit a second order polynomial to each
+    leftx = nonzero_x[left_lane_inds]
+    lefty = nonzero_y[left_lane_inds]
+    # Fit a second order polynomial to the left lane
     left_fit = np.polyfit(lefty, leftx, 2)
+
+    # Fit a second order polynomial to the right lane
+    rightx = nonzero_x[right_lane_inds]
+    righty = nonzero_y[right_lane_inds]
     right_fit = np.polyfit(righty, rightx, 2)
-    return left_fit, right_fit
+
+    if return_debug_img:
+        debug_image[nonzero_y[left_lane_inds], nonzero_x[left_lane_inds]] = [255, 0, 0]
+        debug_image[nonzero_y[right_lane_inds], nonzero_x[right_lane_inds]] = [0, 0, 255]
+        return left_fit, right_fit, debug_image
+    else:
+        return left_fit, right_fit
+
 
 calibration_image_dir = "camera_cal/"
 # the list of calibration images

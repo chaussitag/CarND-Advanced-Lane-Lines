@@ -79,6 +79,7 @@ def sobel_hsl_filter_test(test_img_path):
     axes2.set_title('Filter By Sobel & S-Channel', fontsize=15)
     plt.show()
 
+
 def sobel_hsl_warp_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
     img = mpimg.imread(test_img_path)
@@ -102,6 +103,7 @@ def sobel_hsl_warp_test(test_img_path):
     axes3.set_title("Soble & S-Channel & Warp", fontsize=15)
     plt.show()
 
+
 def rgb_to_warped_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
     img = mpimg.imread(test_img_path)
@@ -114,14 +116,16 @@ def rgb_to_warped_test(test_img_path):
     axes2.set_title('Warped Binary', fontsize=15)
     plt.show()
 
+
 def sliding_window_conv_detect_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
     img = mpimg.imread(test_img_path)
     warped_binary = rgb_to_warped_binary(img, cam_intrinsic, cam_distortion)
-    left_fit, right_fit = sliding_window_conv_detect(warped_binary,
-                                                     conv_det_config["width"],
-                                                     conv_det_config["height"],
-                                                     conv_det_config["margin"])
+    left_fit, right_fit, debug_img = sliding_window_conv_detect(warped_binary,
+                                                                conv_det_config["width"],
+                                                                conv_det_config["height"],
+                                                                conv_det_config["margin"],
+                                                                return_debug_img=True)
     # Generate x and y values for plotting
     ploty = np.linspace(0, warped_binary.shape[0] - 1, warped_binary.shape[0])
     left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
@@ -131,25 +135,28 @@ def sliding_window_conv_detect_test(test_img_path):
     f.suptitle(test_img_path.split("/")[-1], fontsize=30)
     axes1.imshow(img)
     axes1.set_title('Original', fontsize=15)
-    axes2.imshow(warped_binary, cmap="gray")
+
+    axes2.imshow(debug_img, cmap="gray")
     axes2.set_title('Detected', fontsize=15)
-    axes2.plot(left_fitx, ploty, color='red')
-    axes2.plot(right_fitx, ploty, color='red')
+    axes2.plot(left_fitx, ploty, color='yellow')
+    axes2.plot(right_fitx, ploty, color='yellow')
     axes2.set_xlim(0, img.shape[1])
     axes2.set_ylim(img.shape[0], 0)
     plt.show()
+
 
 def sliding_window_detect_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
     img = mpimg.imread(test_img_path)
     warped_binary = rgb_to_warped_binary(img, cam_intrinsic, cam_distortion)
-    left_fit, right_fit = sliding_window_detect(warped_binary,
-                                                window_det_config["height"],
-                                                window_det_config["margin"],
-                                                window_det_config["min_num_pixels"])
+    left_fit, right_fit, debug_img = sliding_window_detect(warped_binary,
+                                                           window_det_config["height"],
+                                                           window_det_config["margin"],
+                                                           window_det_config["min_num_pixels"],
+                                                           return_debug_img=True)
     # Generate x and y values for plotting
     ploty = np.linspace(0, warped_binary.shape[0] - 1, warped_binary.shape[0])
-    #ploty = np.linspace(warped_binary.shape[0]/4, warped_binary.shape[0] - 1, warped_binary.shape[0] * 3 / 4)
+    # ploty = np.linspace(warped_binary.shape[0]/4, warped_binary.shape[0] - 1, warped_binary.shape[0] * 3 / 4)
     left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
     right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
 
@@ -157,22 +164,25 @@ def sliding_window_detect_test(test_img_path):
     f.suptitle(test_img_path.split("/")[-1], fontsize=30)
     axes1.imshow(img)
     axes1.set_title('Original', fontsize=15)
-    axes2.imshow(warped_binary, cmap="gray")
+
+    axes2.imshow(debug_img)
     axes2.set_title('Detected', fontsize=15)
-    axes2.plot(left_fitx, ploty, color='red')
-    axes2.plot(right_fitx, ploty, color='red')
+    axes2.plot(left_fitx, ploty, color='yellow')
+    axes2.plot(right_fitx, ploty, color='yellow')
     axes2.set_xlim(0, img.shape[1])
     axes2.set_ylim(img.shape[0], 0)
     plt.show()
 
+
 # undistort_test("camera_cal/calibration1.jpg")
 
 test_image_list = glob.glob("test_images/*.jpg")
+# test_image_list = ["test_images/test5.jpg"]
 for test_image_path in test_image_list:
     # sobel_filter_test(test_image_path)
     # hls_filter_test(test_image_path)
     # sobel_hsl_filter_test(test_image_path)
-    #sobel_hsl_warp_test(test_image_path)
-    #rgb_to_warped_test(test_image_path)
-    #sliding_window_conv_detect_test(test_image_path)
-    sliding_window_detect_test(test_image_path)
+    # sobel_hsl_warp_test(test_image_path)
+    # rgb_to_warped_test(test_image_path)
+    sliding_window_conv_detect_test(test_image_path)
+    # sliding_window_detect_test(test_image_path)
