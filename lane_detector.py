@@ -3,10 +3,10 @@
 
 import configure as cfg
 from camera import load_cached_camera_parameters, calibrate_camera
-from image_filter import rgb_to_warped_binary, warp_image
+from image_filter import rgb_to_warped_binary, warp_image, region_of_interest
 from utils import get_curvature, get_center_offset
 
-import  argparse
+import argparse
 import cv2
 import glob
 import numpy as np
@@ -24,6 +24,86 @@ class Result(object):
         self.debug_image = None
 
 
+class LatestResults(object):
+    def __init__(self, max_kept=4):
+        self.l_fits = list()
+        self.r_fits = list()
+        self.l_curvatures = list()
+        self.r_curvatures = list()
+        self.center_offsets = list()
+        self.debug_images = list()
+        self._max_kept = max_kept
+
+    def num_kept_results(self):
+        return len(self.l_fits)
+
+    def append_result(self, result):
+        if self.num_kept_results() >= self._max_kept:
+            self.pop_result(0)
+        self.l_fits.append(result.l_fit)
+        self.r_fits.append(result.r_fit)
+        self.l_curvatures.append(result.l_curvature)
+        self.r_curvatures.append(result.r_curvature)
+        self.center_offsets.append(result.center_offset)
+        self.debug_images.append(result.debug_image)
+
+    def pop_result(self, index=0):
+        self.l_fits.pop(index)
+        self.r_fits.pop(index)
+        self.l_curvatures.pop(index)
+        self.r_curvatures.pop(index)
+        self.center_offsets.pop(index)
+        self.debug_images.pop(index)
+
+    def average_with(self, result, n_used=2):
+
+        l_fit_list = self.l_fits[-n_used:].copy()
+        l_fit_list.append(result.l_fit)
+
+        r_fit_list = self.r_fits[-n_used:].copy()
+        r_fit_list.append(result.r_fit)
+
+        l_curvature_list = self.l_curvatures[-n_used:].copy()
+        l_curvature_list.append(result.l_curvature)
+
+        r_curvature_list = self.r_curvatures[-n_used:].copy()
+        r_curvature_list.append(result.r_curvature)
+
+        center_offset_list = self.center_offsets[-n_used:].copy()
+        center_offset_list.append(result.center_offset)
+
+        averaged = Result()
+        averaged.l_fit = np.mean(l_fit_list, axis=0)
+        averaged.r_fit = np.mean(r_fit_list, axis=0)
+        averaged.l_curvature = np.mean(l_curvature_list)
+        averaged.r_curvature = np.mean(r_curvature_list)
+        averaged.center_offset = np.mean(center_offset_list)
+        averaged.debug_image = result.debug_image
+
+        return averaged
+
+    def get_average_result(self):
+        average = Result()
+        average.l_fit = np.mean(self.l_fits, axis=0)
+        average.r_fit = np.mean(self.r_fits, axis=0)
+        average.l_curvature = np.mean(self.l_curvatures)
+        average.r_curvature = np.mean(self.r_curvatures)
+        average.center_offset = np.mean(self.center_offsets)
+        return average
+
+    def get_last_result(self):
+        if self.num_kept_results() < 1:
+            return None
+        latest = Result()
+        latest.l_fit = self.l_fits[-1]
+        latest.r_fit = self.r_fits[-1]
+        latest.l_curvature = self.l_curvatures[-1]
+        latest.r_curvature = self.r_curvatures[-1]
+        latest.center_offset = self.center_offsets[-1]
+        latest.debug_image = self.debug_images[-1]
+        return latest
+
+
 class LaneDetector(object):
     def __init__(self):
         # load the camera parameters
@@ -37,113 +117,93 @@ class LaneDetector(object):
         self._cam_intrinsic = camera_intrinsic
         self._cam_distortion = camera_distortion
 
-        self._cur_result = None
-
-        self._num_kept_result = 5
-        self._latest_results = list()
+        self._latest_results = LatestResults()
 
         self._consecutive_failed_cnt = 0
         self._max_allowed_failed = 5
 
         self._use_conv = False
 
+        self._debug = True
+
     @staticmethod
     def sanity_check(detected_result):
         if detected_result is None:
             return False
 
+        check_passed = True
         if abs(detected_result.center_offset) > 2:
             print("center offset too large: %d" % detected_result.center_offset)
-            return False
-
-        if detected_result.l_curvature > (5 * detected_result.r_curvature) \
-                or detected_result.r_curvature > (5 * detected_result.l_curvature):
+            check_passed = False
+        elif detected_result.l_curvature > (6 * detected_result.r_curvature) \
+                or detected_result.r_curvature > (6 * detected_result.l_curvature):
             print("diff between left and right curvature too large:  l_curvature %.2f, r_curvature %.2f"
                   % (detected_result.l_curvature, detected_result.r_curvature))
-            return False
-
-        if detected_result.l_curvature < 250 or detected_result.l_curvature > 10000 \
+            check_passed = False
+        elif detected_result.l_curvature < 250 or detected_result.l_curvature > 10000 \
                 or detected_result.r_curvature < 250 or detected_result.r_curvature > 10000:
             print("curvature invaid, l_curvature %.2f, r_curvature %.2f"
                   % (detected_result.l_curvature, detected_result.r_curvature))
-            return False
+            check_passed = False
 
-        return True
+        return check_passed
 
-    def append_result(self, result):
-        if len(self._latest_results) >= self._num_kept_result:
-            self._latest_results.pop(0)
-        self._latest_results.append(result)
-
-    # def smooth_result(self, result):
-    #     kept_results = len(self._latest_results)
-    #     if kept_results < 1:
-    #         return result
-    #     for kept in self._latest_results:
-    #         result.l_fit += kept.l_fit
-    #         result.r_fit += kept.r_fit
-    #         result.l_curvature += kept.l_curvature
-    #         result.r_curvature += kept.r_curvature
-    #         result.center_offset += kept.center_offset
-    #
-    #     n = kept_results + 1
-    #     result.l_fit /= n
-    #     result.r_fit /= n
-    #     result.l_curvature /= n
-    #     result.r_curvature /= n
-    #     result.center_offset /= n
-    #     return result
-
-    def detect_from_scrach(self, warped_binary):
+    def detect_from_scrach(self, warped_binary, need_debug_image=False):
         if self._use_conv:
             return self.sliding_window_conv_detect(warped_binary,
                                                    cfg.sliding_conv_config["width"],
                                                    cfg.sliding_conv_config["height"],
-                                                   cfg.sliding_conv_config["margin"])
+                                                   cfg.sliding_conv_config["margin"],
+                                                   need_debug_image)
         else:
             return self.sliding_window_detect(warped_binary,
                                               cfg.sliding_window_config["height"],
                                               cfg.sliding_window_config["margin"],
-                                              cfg.sliding_window_config["min_num_pixels"])
+                                              cfg.sliding_window_config["min_num_pixels"],
+                                              need_debug_image)
 
     def pipe_line(self, rgb_image):
-        warped_binary = rgb_to_warped_binary(rgb_image, self._cam_intrinsic, self._cam_distortion)
+        #roi_image = region_of_interest(rgb_image, cfg.roi_vertices)
+        roi_image = rgb_image
+        warped_binary = rgb_to_warped_binary(roi_image, self._cam_intrinsic, self._cam_distortion)
         img_h, img_w = warped_binary.shape[0:2]
 
-        append_result = False
-        # the first frame
-        if len(self._latest_results) == 0:
+        detected = False
+        if self._latest_results.num_kept_results() == 0: # the first frame
             cur_result = self.detect_from_scrach(warped_binary)
             # self.append_result(cur_result)
-            append_result = True
+            detected = True
         else:
             if self._consecutive_failed_cnt >= self._max_allowed_failed:
                 print("number of consecutive failed is %d, sliding window search from scrach"
                       % self._consecutive_failed_cnt)
                 # too many failed, sliding window search from scrath
-                cur_result = self.detect_from_scrach(warped_binary)
+                cur_result = self.detect_from_scrach(warped_binary, self._debug)
                 self._consecutive_failed_cnt = 0
             else:
-                # detect based on previous result
-                last_result = self._latest_results[-1]
-                cur_result = self.detect_use_prev_result(warped_binary, last_result.l_fit, last_result.r_fit,
-                                                         cfg.prev_result_based_search_margin)
+                # use average of all previous results as the search base
+                # prev_result = self._latest_results.get_last_result()
+                prev_result = self._latest_results.get_average_result()
+                cur_result = self.detect_based_prev_result(warped_binary, prev_result.l_fit,
+                                                           prev_result.r_fit,
+                                                           cfg.prev_result_based_search_margin,
+                                                           self._debug)
 
             if self.sanity_check(cur_result):
-                # self.append_result(cur_result)
-                append_result = True
+                detected = True
                 self._consecutive_failed_cnt = 0
             else:
                 # sanity check failed, use previous result for current frame
                 print("sanity check failed, used last valid result for current frame, self._consecutive_failed_cnt %d"
                       % self._consecutive_failed_cnt)
-                cur_result = self._latest_results[-1]
+                cur_result = self._latest_results.get_last_result()
+                #cur_result = self._latest_results.get_average_result()
                 self._consecutive_failed_cnt += 1
 
-        # cur_result = self.smooth_result(cur_result)
-        self._cur_result = cur_result
-        if append_result:
-            self.append_result(cur_result)
+        if detected:
+            # average new result with the previous ones as the current result
+            cur_result = self._latest_results.average_with(cur_result, 1)
+            self._latest_results.append_result(cur_result)
 
         left_fit = cur_result.l_fit
         right_fit = cur_result.r_fit
@@ -181,6 +241,11 @@ class LaneDetector(object):
                     font, font_scale, font_color, thickness)
         cv2.putText(result_img, "center offset  : %.2fm" % center_offset, (img_w // 2, 95),
                     font, font_scale, font_color, thickness)
+
+        if cur_result.debug_image is not None:
+            debug_img_small = cv2.resize(cur_result.debug_image, None, fx=0.2, fy=0.2)
+            small_h, small_w = debug_img_small.shape[0:2]
+            result_img[0:small_h, 0:small_w] = debug_img_small
 
         return result_img
 
@@ -283,7 +348,7 @@ class LaneDetector(object):
         return result
 
     @staticmethod
-    def detect_use_prev_result(warped_binary, prev_left_fit, prev_right_fit, margin, return_debug_img=False):
+    def detect_based_prev_result(warped_binary, prev_left_fit, prev_right_fit, margin, return_debug_img=False):
         nonzero = warped_binary.nonzero()
         nonzero_y = np.array(nonzero[0])
         nonzero_x = np.array(nonzero[1])
@@ -298,9 +363,9 @@ class LaneDetector(object):
         r_right_margin = r_center_x + margin
         right_lane_inds = ((nonzero_x > r_left_margin) & (nonzero_x < r_right_margin))
 
-        min_pts = 10
-        if len(left_lane_inds) < min_pts or len(right_lane_inds) < min_pts:
-            return None
+        # min_pts = 10
+        # if len(left_lane_inds) < min_pts or len(right_lane_inds) < min_pts:
+        #     return None
 
         # extract left and right line pixel positions
         leftx = nonzero_x[left_lane_inds]
@@ -547,8 +612,6 @@ if __name__ == "__main__":
         name_splits = input_name.split(".")
         args.output = osp.join(dir_of_this_file, name_splits[0] + "_output." + name_splits[-1])
     print("output is %s" % args.output)
-
-
 
     video_clip = VideoFileClip(args.input)
     process_frame_func = get_frame_process_func()

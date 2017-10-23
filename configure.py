@@ -7,11 +7,13 @@ import numpy as np
 camera_calibration_img_dir = osp.join(osp.dirname(osp.abspath(__file__)), "camera_cal/")
 camera_param_cache_path = osp.join(osp.dirname(osp.abspath(__file__)), "camera_params.p")
 
+roi_vertices = np.array([[(110, 720), (565, 450),(760, 450), (1210, 720)]], dtype = np.int32)
+
 thresh_config = {
     # "abs_sobel_x_thresh": (30, 200),
     "abs_sobel_x_thresh": (20, 160),
     # "abs_sobel_y_thresh": (25, 180),
-    "gradient_magnitude_thresh": (20, 200),
+    "gradient_magnitude_thresh": (20, 180),
     "gradient_direction_thresh": (0.6, 1.3),
     # "s_channel_thresh": (135, 250),
     "s_channel_thresh": (160, 255),
@@ -19,10 +21,11 @@ thresh_config = {
 }
 
 warp_config = {
-    # "src_rect": np.float32([[584, 457], [707, 457], [1102, 676], [299, 676]]),
-    # "dst_rect": np.float32([[320, 0], [950, 0], [950, 720], [320, 720]])
-    "src_rect": np.float32([[585, 460], [203, 720], [1127, 720], [705, 460]]),
-    "dst_rect": np.float32([[320, 0], [320, 720], [960, 720], [960, 0]])
+    "src_rect": np.float32([[584, 457], [707, 457], [1102, 676], [299, 676]]),
+    "dst_rect": np.float32([[325, 0], [960, 0], [960, 720], [325, 720]]),
+
+    # "src_rect": np.float32([[580, 460], [203, 720], [1127, 720], [700, 460]]),
+    # "dst_rect": np.float32([[320, 0], [320, 720], [960, 720], [960, 0]]),
 }
 
 # confiure for the 1-D convolutional based sliding widow search
@@ -40,7 +43,7 @@ sliding_window_config = {
 }
 
 # the margin for searching along previous found lanes
-prev_result_based_search_margin = 100
+prev_result_based_search_margin = 120
 
 pixel_to_meter_config = {
     "x_meters_per_pixel": 3.7 / 700,

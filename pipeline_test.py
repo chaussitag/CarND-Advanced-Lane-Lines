@@ -4,23 +4,31 @@
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+from matplotlib.patches import Polygon
 import numpy as np
 import glob
 
 from lane_detector import LaneDetector
 from camera import load_cached_camera_parameters
-from configure import thresh_config, warp_config, sliding_window_config, sliding_conv_config
-from image_filter import undistort_image, sobel_filter, hls_filter, warp_image, rgb_to_warped_binary
+from configure import thresh_config, warp_config, sliding_window_config, sliding_conv_config, roi_vertices
+from image_filter import undistort_image, sobel_filter, hls_filter, warp_image, rgb_to_warped_binary, region_of_interest
 
 
-# from cv_based_lane_line_detection import sliding_window_detect, sliding_window_conv_detect
+def roi_test(test_img_path):
+    img = mpimg.imread(test_img_path)
+    roi_img = region_of_interest(img, roi_vertices)
+    f, (axes1, axes2) = plt.subplots(1, 2, figsize=(20, 10))
+    axes1.imshow(img)
+    axes1.add_patch(Polygon(roi_vertices.reshape(-1, 2), closed=True, fill=False, color="green"))
+    axes1.set_title('Original', fontsize=15)
+    axes2.imshow(roi_img)
+    axes2.set_title('ROI', fontsize=15)
+    plt.show()
 
-
-# import cv_based_lane_line_detection as line_detection
 
 def undistort_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
-    calib_test_image = cv2.imread(test_img_path)
+    calib_test_image = mpimg.imread(test_img_path)
     undistorted_calib_test_image = undistort_image(calib_test_image, cam_intrinsic, cam_distortion)
     # Visualize undistortion
     f, (axes1, axes2) = plt.subplots(1, 2, figsize=(20, 10))
@@ -107,6 +115,22 @@ def sobel_hsl_warp_test(test_img_path):
     axes3.set_title("Soble & S-Channel & Warp", fontsize=15)
     plt.show()
 
+def warp_test(test_img_path):
+    cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
+    img = mpimg.imread(test_img_path)
+    undistorted_img = undistort_image(img, cam_intrinsic, cam_distortion)
+    warp_matrix = cv2.getPerspectiveTransform(warp_config["src_rect"], warp_config["dst_rect"])
+    warped_img = warp_image(undistorted_img, warp_matrix)
+
+    f, (axes1, axes2) = plt.subplots(1, 2, figsize=(20, 10))
+    axes1.imshow(undistorted_img)
+    axes1.add_patch(Polygon(warp_config["src_rect"], closed=True, fill=False, color="red"))
+    axes1.set_title('undistorted image with source points drawn', fontsize=15)
+
+    axes2.imshow(warped_img)
+    axes2.add_patch(Polygon(warp_config["dst_rect"], closed=True, fill=False, color="red"))
+    axes2.set_title('warped image with destination points drawn', fontsize=15)
+    plt.show()
 
 def rgb_to_warped_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
@@ -206,15 +230,18 @@ def sliding_window_detect_test(test_img_path):
     plt.show()
 
 
-# undistort_test("camera_cal/calibration1.jpg")
+#undistort_test("camera_cal/calibration1.jpg")
 
-test_image_list = glob.glob("test_images/mytest*.jpg")
-# test_image_list = ["test_images/test5.jpg"]
+#test_image_list = glob.glob("test_images/mytest*.jpg")
+test_image_list = ["test_images/mytest4.jpg"]
 for test_image_path in test_image_list:
+    # undistort_test(test_image_path)
+    # roi_test(test_image_path)
     # sobel_filter_test(test_image_path)
     # hls_filter_test(test_image_path)
     # sobel_hsl_filter_test(test_image_path)
     # sobel_hsl_warp_test(test_image_path)
+    # warp_test(test_image_path)
     # rgb_to_warped_test(test_image_path)
-    sliding_window_conv_detect_test(test_image_path)
+    # sliding_window_conv_detect_test(test_image_path)
     sliding_window_detect_test(test_image_path)
