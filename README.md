@@ -62,8 +62,8 @@ and here is an example result,  please take a look at the the difference of the 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
 I used a combination of color and gradient thresholds to generate a binary image, all thresholding code are placed in file `image_filter.py`: 
-(1) the function **'sobel_filter()'** applies sobel operator to the input image, and then use x gradient and magnitude and direction of gradient to threshold out interesting pixel position.
-(2) the function  **'hls_filter()'** and **`hls_filter()`** use color thresholding to filter out interesting pixel positions, the s-channel is especially useful for this project.
+(1) the function **'sobel_filter()'** applies sobel operator to the input image, and then use x gradient and magnitude and direction of gradient to threshold out interesting pixel position.<br>
+(2) the function  **'hls_filter()'** and **`hls_filter()`** use color thresholding to filter out interesting pixel positions, the s-channel is especially useful for this project.<br>
 
 Here's an example of my output for this step. the green pixels are  those thresholded by sobel operator, and the blue pixels are those thresholded by color.
 
@@ -86,17 +86,17 @@ I verified that my perspective transform was working as expected by drawing the 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
 Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
-(4.1) applying undistortion, thresholding and warp to the input image, resulting a binary image which is used by next step;
+(4.1) applying undistortion, thresholding and warp to the input image, resulting a binary image which is used by next step;<br>
 
-(4.2) there're two situations:
-  (4.2.1) searching from scrach, the function is defined in file `lane_detector.py` as **`sliding_window_detect()`**, it basically performs following steps:
-            calculate the histogram along x-axis, and find the peak of the left and rigt half as the base position for left and right lane.
-            then starting from the base x positions, sliding a widow of size 200x80 along y-axis to identify the lane-line pixels.
-            at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.
-(4.2.2) searching based on previous result, the function is defined in `lane_detector.py` as **`detect_based_prev_result()`**, it basically performs the following steps:
-           use previous fitted polynomial to calculate y coordinate for each valid pixel's x coordinate,
-           then plus and minus 100 to the calculated x value, defining a search region, and find out the pixels lived in the left and right region;
-           at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.
+(4.2) there're two situations:<br>
+  (4.2.1) searching from scrach, the function is defined in file `lane_detector.py` as **`sliding_window_detect()`**, it basically performs following steps:<br>
+            calculate the histogram along x-axis, and find the peak of the left and rigt half as the base position for left and right lane.<br>
+            then starting from the base x positions, sliding a widow of size 200x80 along y-axis to identify the lane-line pixels.<br>
+            at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.<br>
+(4.2.2) searching based on previous result, the function is defined in `lane_detector.py` as **`detect_based_prev_result()`**, it basically performs the following steps:<br>
+           use previous fitted polynomial to calculate y coordinate for each valid pixel's x coordinate,<br>
+           then plus and minus 100 to the calculated x value, defining a search region, and find out the pixels lived in the left and right region;<br>
+           at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.<br>
 
 
 here is an example results of the fitted polynomial:
@@ -128,8 +128,8 @@ Here's a [link to my video result](./project_video_output.mp4)
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
 Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further. 
-(1) on my first version the pipeline performs not well when the car passing the tree shade, to fix the problem, i tuned the source and destination points for calculating the warp matrix, and i also use some of previous result to smooth the current one, finnally i got the result video listed above. 
-i also tried the 1-D convolution sliding search and made some improvement to the code in the course, but it does not fix the problem.
-(2) the sanity check i used is really simple, i believe there're some better conditions to check for accepting the current detected result, for example, the curvature difference between two lanes, the distance between two lanes;
-(3) lots of thresholds were chosen by hand, it's better to do some adaptive thresholding, we can take use of the color or other features of the lane-lines to design some more advanced technique. 
+(1) on my first version the pipeline performs not well when the car passing the tree shade, to fix the problem, i tuned the source and destination points for calculating the warp matrix, and i also use some of previous result to smooth the current one, finnally i got the result video listed above. <br>
+i also tried the 1-D convolution sliding search and made some improvement to the code in the course, but it does not fix the problem.<br>
+(2) the sanity check i used is really simple, i believe there're some better conditions to check for accepting the current detected result, for example, the curvature difference between two lanes, the distance between two lanes;<br>
+(3) lots of thresholds were chosen by hand, it's better to do some adaptive thresholding, we can take use of the color or other features of the lane-lines to design some more advanced technique. <br>
 (4) it's necessary to evaluate how good the detected left and right lane lines are, and we can use the better one to fix the worse one.
