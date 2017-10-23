@@ -61,7 +61,7 @@ and here is an example result,  please take a look at the the difference of the 
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image, all thresholding code are placed in file `image_filter.py`: 
+I used a combination of color and gradient thresholds to generate a binary image, all thresholding code are placed in file `image_filter.py`: <br>
 (1) the function **'sobel_filter()'** applies sobel operator to the input image, and then use x gradient and magnitude and direction of gradient to threshold out interesting pixel position.<br>
 (2) the function  **'hls_filter()'** and **`hls_filter()`** use color thresholding to filter out interesting pixel positions, the s-channel is especially useful for this project.<br>
 
@@ -85,18 +85,18 @@ I verified that my perspective transform was working as expected by drawing the 
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:<br>
 (4.1) applying undistortion, thresholding and warp to the input image, resulting a binary image which is used by next step;<br>
 
 (4.2) there're two situations:<br>
-  (4.2.1) searching from scrach, the function is defined in file `lane_detector.py` as **`sliding_window_detect()`**, it basically performs following steps:<br>
-            calculate the histogram along x-axis, and find the peak of the left and rigt half as the base position for left and right lane.<br>
-            then starting from the base x positions, sliding a widow of size 200x80 along y-axis to identify the lane-line pixels.<br>
-            at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.<br>
-(4.2.2) searching based on previous result, the function is defined in `lane_detector.py` as **`detect_based_prev_result()`**, it basically performs the following steps:<br>
-           use previous fitted polynomial to calculate y coordinate for each valid pixel's x coordinate,<br>
-           then plus and minus 100 to the calculated x value, defining a search region, and find out the pixels lived in the left and right region;<br>
-           at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.<br>
+&emsp;(4.2.1) searching from scrach, the function is defined in file `lane_detector.py` as **`sliding_window_detect()`**, it basically performs following steps:<br>
+            &emsp;&emsp; calculate the histogram along x-axis, and find the peak of the left and rigt half as the base position for left and right lane.<br>
+            &emsp;&emsp; then starting from the base x positions, sliding a widow of size 200x80 along y-axis to identify the lane-line pixels.<br>
+            &emsp;&emsp; at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.<br>
+&emsp;(4.2.2) searching based on previous result, the function is defined in `lane_detector.py` as **`detect_based_prev_result()`**, it basically performs the following steps:<br>
+           &emsp;&emsp; use previous fitted polynomial to calculate y coordinate for each valid pixel's x coordinate,<br>
+           &emsp;&emsp; then plus and minus 100 to the calculated x value, defining a search region, and find out the pixels lived in the left and right region;<br>
+           &emsp;&emsp; at last use numpy.polyfit() to fit a 2nd order polynomial for both lane-lines.<br>
 
 
 here is an example results of the fitted polynomial:
@@ -127,7 +127,7 @@ Here's a [link to my video result](./project_video_output.mp4)
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further. 
+Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further. <br>
 (1) on my first version the pipeline performs not well when the car passing the tree shade, to fix the problem, i tuned the source and destination points for calculating the warp matrix, and i also use some of previous result to smooth the current one, finnally i got the result video listed above. <br>
 i also tried the 1-D convolution sliding search and made some improvement to the code in the course, but it does not fix the problem.<br>
 (2) the sanity check i used is really simple, i believe there're some better conditions to check for accepting the current detected result, for example, the curvature difference between two lanes, the distance between two lanes;<br>
