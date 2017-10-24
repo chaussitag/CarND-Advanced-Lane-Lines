@@ -30,6 +30,10 @@ def undistort_test(test_img_path):
     cam_intrinsic, cam_distortion = load_cached_camera_parameters("./camera_params.p")
     calib_test_image = mpimg.imread(test_img_path)
     undistorted_calib_test_image = undistort_image(calib_test_image, cam_intrinsic, cam_distortion)
+    # image_name = test_img_path.split("/")[-1]
+    # name_without_suffix = image_name.split(".")[0]
+    # mpimg.imsave(name_without_suffix + "_undistorted.png", undistorted_calib_test_image, format="png")
+    # mpimg.imsave(name_without_suffix + ".png", calib_test_image, format="png")
     # Visualize undistortion
     f, (axes1, axes2) = plt.subplots(1, 2, figsize=(20, 10))
     axes1.imshow(calib_test_image)
@@ -230,6 +234,26 @@ def sliding_window_detect_test(test_img_path):
     plt.show()
 
 
+def pipe_test(test_img_path):
+    detector = LaneDetector()
+    img = mpimg.imread(test_img_path)
+    result_img = detector.pipe_line(img)
+
+    # combined = cv2.addWeighted(img, 1, result_img, 0.4, 0)
+
+    f, (axes1, axes2) = plt.subplots(1, 2, figsize=(20, 10))
+    f.suptitle(test_img_path.split("/")[-1], fontsize=30)
+    axes1.imshow(img)
+    axes1.set_xlim(0, img.shape[1])
+    axes1.set_ylim(img.shape[0], 0)
+    axes1.set_title('original frame', fontsize=15)
+
+    axes2.imshow(result_img, cmap="gray")
+    axes2.set_title('result frame with detected road', fontsize=15)
+    axes2.set_xlim(0, img.shape[1])
+    axes2.set_ylim(img.shape[0], 0)
+    plt.show()
+
 #undistort_test("camera_cal/calibration1.jpg")
 
 #test_image_list = glob.glob("test_images/mytest*.jpg")
@@ -244,4 +268,5 @@ for test_image_path in test_image_list:
     # warp_test(test_image_path)
     # rgb_to_warped_test(test_image_path)
     # sliding_window_conv_detect_test(test_image_path)
-    sliding_window_detect_test(test_image_path)
+    #sliding_window_detect_test(test_image_path)
+    pipe_test(test_image_path)

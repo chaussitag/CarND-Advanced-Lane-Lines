@@ -21,6 +21,7 @@ The goals / steps of this project are the following:
 [image4]: ./output_images/warped_color_frame.png "Warped Example"
 [image5]: ./output_images/fitted_curve.png "Fit Visual"
 [image6]: ./output_images/detect_result.png "Output"
+[image7]: ./output_images/review_comment.png "Review Comment"
 [video1]: ./project_video_output.mp4 "Video"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
@@ -109,11 +110,24 @@ The function **`get_center_offset()`** defined in `utils.py` calculate position 
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines 214 through 228 in my code in `lane_detector.py` in the function `pipe_line()` of class `LaneDetector`.  Here is an example of the result:
-
-![alt text][image6]
+I implemented this step in lines 214 through 228 in my code in `lane_detector.py` in the function `pipe_line()` of class `LaneDetector`. 
 
 ---
+####fix the failed review item####
+![alt text][image7]<br>
+I fix the problem by undistorting the input image and combine the undistorted image with the detection result.<br>
+I uploaded the updated result video and the following example result image.<br>
+Following is the related code from line 227 to 229 in the file `lane_detector.py` in the function  `pipe_line()` of class `LaneDetector`:<br>
+
+```python
+227        # undistort the input image and combine with the detected road region as the result image
+228        undistorted_input = undistort_image(rgb_image, self._cam_intrinsic, self._cam_distortion)
+229        result_img = cv2.addWeighted(undistorted_input, 1, newwarp, 0.4, 0)
+```
+---
+
+Here is an example of the result(the sub-image on top-left is mid-result of the pipeline, just for demonstrating how the algorithms works)<br>
+![alt text][image6]
 
 ### Pipeline (video)
 

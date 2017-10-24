@@ -3,7 +3,7 @@
 
 import configure as cfg
 from camera import load_cached_camera_parameters, calibrate_camera
-from image_filter import rgb_to_warped_binary, warp_image, region_of_interest
+from image_filter import rgb_to_warped_binary, warp_image, region_of_interest, undistort_image
 from utils import get_curvature, get_center_offset
 
 import argparse
@@ -164,13 +164,13 @@ class LaneDetector(object):
 
     def pipe_line(self, rgb_image):
         #roi_image = region_of_interest(rgb_image, cfg.roi_vertices)
-        roi_image = rgb_image
-        warped_binary = rgb_to_warped_binary(roi_image, self._cam_intrinsic, self._cam_distortion)
+        #roi_image = rgb_image
+        warped_binary = rgb_to_warped_binary(rgb_image, self._cam_intrinsic, self._cam_distortion)
         img_h, img_w = warped_binary.shape[0:2]
 
         detected = False
         if self._latest_results.num_kept_results() == 0: # the first frame
-            cur_result = self.detect_from_scrach(warped_binary)
+            cur_result = self.detect_from_scrach(warped_binary, self._debug)
             # self.append_result(cur_result)
             detected = True
         else:
@@ -224,8 +224,9 @@ class LaneDetector(object):
         unwarp_matrix_ = cv2.getPerspectiveTransform(cfg.warp_config["dst_rect"], cfg.warp_config["src_rect"])
         newwarp = warp_image(color_warp, unwarp_matrix_)
 
-        # Combine the detected result with the original image
-        result_img = cv2.addWeighted(rgb_image, 1, newwarp, 0.4, 0)
+        # undistort the input image and combine with the detected road region as the result image
+        undistorted_input = undistort_image(rgb_image, self._cam_intrinsic, self._cam_distortion)
+        result_img = cv2.addWeighted(undistorted_input, 1, newwarp, 0.4, 0)
 
         # write the curvature and center offset
         left_curvature = cur_result.l_curvature
